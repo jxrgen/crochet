@@ -62,117 +62,202 @@ class STParser {
 
 // ========== Texture Generator ==========
 class TextureGenerator {
-  // Knit pattern: Stockinette stitch with alternating rows of v-shaped stitches
+
+  // Knit pattern (Stockinette): V-shaped stitches in columns, purl bumps on alternate rows
+  // Each stitch is a V on right side, horizontal bump on wrong side
   static knitPattern(x, y, scale, depth) {
-    const stitchW = scale;
-    const stitchH = scale * 1.2;
+    const stitchWidth = scale;
+    const stitchHeight = scale * 1.4; // Knit stitches are taller than wide
 
-    // Map to stitch grid
-    const col = x / stitchW;
-    const row = y / stitchH;
-    const colFrac = col - Math.floor(col);
-    const rowFrac = row - Math.floor(row);
-    const isEvenRow = Math.floor(row) % 2 === 0;
+    const col = x / stitchWidth;
+    const row = y / stitchHeight;
 
-    // Create v-shaped knit stitch
-    const centerX = isEvenRow ? colFrac : 1 - colFrac;
-    const vShape = Math.max(0, 1 - Math.abs(centerX * 2 - 1) * 1.5);
-    const rowWave = Math.sin(rowFrac * Math.PI);
-    const stitch = vShape * rowWave;
+    const colIdx = Math.floor(col);
+    const rowIdx = Math.floor(row);
 
-    return stitch * depth;
+    const colFrac = col - colIdx; // 0..1 within stitch
+    const rowFrac = row - rowIdx; // 0..1 within row
+
+    const isEvenRow = (rowIdx % 2) === 0;
+
+    // Create V-shape for knit side (right side)
+    // The V is formed by two legs meeting at the bottom
+    const centerX = colFrac - 0.5; // -0.5 to 0.5
+    const normalizedCenterX = centerX * 2; // -1 to 1
+
+    // V shape: the stitch narrows as we go "up" (higher rowFrac means higher on stitch)
+    // In knitting, V narrows toward the bottom (decreasing rowFrac)
+    const vWidth = 0.3 + rowFrac * 0.7; // V gets wider toward top of stitch
+    const distFromCenter = Math.abs(normalizedCenterX);
+
+    // Main V shape
+    let vShape = 0;
+    if (distFromCenter < vWidth) {
+      vShape = Math.cos((distFromCenter / vWidth) * Math.PI / 2);
+    }
+
+    // Horizontal bar at top of stitch (the "run" between stitches)
+    const topBar = Math.max(0, 1 - Math.abs(rowFrac - 0.1) * 10) * 0.3;
+
+    // Purl bumps on alternate rows (wrong side effect)
+    const purlBump = isEvenRow ? 0 : Math.max(0, 1 - Math.sqrt(centerX*centerX + (rowFrac-0.5)*(rowFrac-0.5)) * 3) * 0.4;
+
+    // Stitch definition: vertical lines between stitches
+    const stitchEdge = Math.max(0, 1 - Math.abs(colFrac - 0.5) * 20) * 0.15;
+
+    // Combine: V-shape with bar and purl texture
+    const result = vShape * 0.6 + topBar + purlBump * 0.4 + stitchEdge;
+
+    return (result - 0.2) * depth; // Center around 0, scale by depth
   }
 
-  // Crochet pattern: Interlocking loops arranged in offset rows
+  // Crochet pattern: Interlocking loops with horizontal bars and V tops
+  // Single crochet creates dense fabric with visible V tops and horizontal bars
   static crochetPattern(x, y, scale, depth) {
-    const loopW = scale * 0.8;
-    const loopH = scale * 0.7;
+    const stitchWidth = scale * 0.85;
+    const stitchHeight = scale * 0.75; // Crochet stitches are shorter
 
-    const col = x / loopW;
-    const row = y / loopH;
-    const colFrac = col - Math.floor(col);
-    const rowFrac = row - Math.floor(row);
-    const isEvenRow = Math.floor(row) % 2 === 0;
+    const col = x / stitchWidth;
+    const row = y / stitchHeight;
 
-    // Offset for even rows (crochet stitch offset)
-    const offsetFrac = isEvenRow ? colFrac : (colFrac + 0.5) % 1;
+    const colIdx = Math.floor(col);
+    const rowIdx = Math.floor(row);
 
-    // Circular loop shape
-    const dx = (offsetFrac - 0.5) * 2;
-    const dy = (rowFrac - 0.5) * 2;
-    const dist = Math.sqrt(dx * dx * 1.2 + dy * dy * 0.8);
-    const loop = Math.max(0, 1 - dist * 1.8);
+    const colFrac = col - colIdx;
+    const rowFrac = row - rowIdx;
 
-    // Add twist detail
-    const twist = Math.sin((offsetFrac + rowFrac) * Math.PI * 2) * 0.15;
+    const isEvenRow = (rowIdx % 2) === 0;
 
-    return loop * depth + twist * depth;
+    // Offset every other row (crochet stitch offset)
+    const offsetColFrac = isEvenRow ? colFrac : (colFrac + 0.5) % 1.0;
+
+    // Main loop shape: circular/oval
+    const dx = (offsetColFrac - 0.5) * 2; // -1 to 1
+    const dy = (rowFrac - 0.5) * 2;     // -1 to 1
+
+    // Loop is oval shaped
+    const loopDist = Math.sqrt(dx * dx * 1.3 + dy * dy * 0.7);
+
+    // Loop bump (the actual crochet loop)
+    const loop = Math.max(0, 1 - loopDist * 1.5);
+
+    // Horizontal bar (the top of the stitch where hook goes through)
+    // This creates the "V" shape on top
+    const barWidth = 0.4;
+    const barHeight = 0.15;
+    const barX = Math.abs(offsetColFrac - 0.5) * 2;
+    const barY = Math.abs(rowFrac - 0.2) * 2;
+
+    const horizontalBar = (barX < barWidth && barY < barHeight) ?
+      Math.cos(barX / barWidth * Math.PI / 2) * Math.cos(barY / barHeight * Math.PI / 2) * 0.5 : 0;
+
+    // Vertical post (the body of the stitch)
+    const postWidth = 0.2;
+    const postX = Math.abs(offsetColFrac - 0.5) * 2;
+    const post = (postX < postWidth) ? Math.cos(postX / postWidth * Math.PI / 2) * 0.3 * (1 - Math.abs(rowFrac - 0.5)) : 0;
+
+    // Twist/lean from crochet (slight diagonal)
+    const lean = dx * 0.1 * Math.sin(rowFrac * Math.PI);
+
+    // Combine all elements
+    const result = loop * 0.5 + horizontalBar + post + lean;
+
+    return (result - 0.15) * depth;
   }
 
-  // Bobble pattern: Raised bobble stitches at regular intervals
+  // Bobble stitch: Raised bobbles (crochet)
   static bobblePattern(x, y, scale, depth) {
-    const bobbleW = scale * 1.5;
-    const bobbleH = scale * 1.5;
+    const bobbleW = scale * 1.8;
+    const bobbleH = scale * 1.8;
 
     const col = x / bobbleW;
     const row = y / bobbleH;
+
     const colFrac = col - Math.floor(col);
     const rowFrac = row - Math.floor(row);
 
-    // Circular bobble
+    // Bobble is a raised hemisphere
     const dx = (colFrac - 0.5) * 2;
     const dy = (rowFrac - 0.5) * 2;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist < 0.7) {
-      // Bobble shape: rounded dome
-      const bobble = Math.cos(dist / 0.7 * Math.PI / 2);
-      return bobble * depth;
+    if (dist < 0.8) {
+      // Hemisphere shape
+      const bobble = Math.cos(dist / 0.8 * Math.PI / 2);
+      return bobble * depth * 0.8;
     }
-    // Slight depression between bobbles
-    return -0.05 * depth;
+
+    // Fabric between bobbles (slight depression)
+    const depression = -0.1 * depth * Math.exp(-(dist - 0.8) * 5);
+    return depression;
   }
 
-  // Rib pattern: Raised vertical columns (knit ribs)
+  // Rib stitch: Alternating knit and purl columns (vertical ribs)
   static ribPattern(x, y, scale, depth) {
-    const ribW = scale * 0.6;
+    const ribW = scale * 0.7;
     const col = x / ribW;
-    const colFrac = col - Math.floor(col);
+    const colIdx = Math.floor(col);
+    const colFrac = col - colIdx;
 
-    // Vertical rib columns
-    const rib = Math.cos(colFrac * Math.PI * 2) * 0.5 + 0.5;
+    const isKnitColumn = (colIdx % 2) === 0;
 
-    // Slight horizontal compression (rib pull-in)
-    const compression = 1 - Math.abs(Math.sin(colFrac * Math.PI)) * 0.1;
-
-    return rib * depth * compression;
+    if (isKnitColumn) {
+      // Knit stitch V-shape (vertical column)
+      const centerX = colFrac - 0.5;
+      const vShape = Math.max(0, 1 - Math.abs(centerX) * 4) * 0.6;
+      // Add horizontal texture
+      const rowFrac = (y / scale * 1.4) - Math.floor(y / scale * 1.4);
+      const hBar = Math.max(0, 1 - Math.abs(rowFrac - 0.1) * 10) * 0.2;
+      return (vShape + hBar) * depth * 0.4;
+    } else {
+      // Purl column (bumpy)
+      const dx = (colFrac - 0.5) * 2;
+      const dy = ((y / scale * 1.4) - Math.floor(y / scale * 1.4) - 0.5) * 2;
+      const dist = Math.sqrt(dx * dx + dy * dy * 0.5);
+      const purl = Math.max(0, 1 - dist * 2) * 0.5;
+      return purl * depth * 0.3;
+    }
   }
 
-  // Cable pattern: Twisted rope-like cables
+  // Cable stitch: Twisted ropes
   static cablePattern(x, y, scale, depth) {
-    const cableW = scale * 2.5;
-    const cableH = scale * 1.2;
+    const cableW = scale * 3;
+    const cableH = scale * 1.5;
 
     const col = x / cableW;
     const row = y / cableH;
+
     const colFrac = col - Math.floor(col);
     const rowFrac = row - Math.floor(row);
 
     // Create twisted cable appearance
-    const twist = Math.sin(rowFrac * Math.PI * 4 + col * Math.PI * 2) * 0.5 + 0.5;
-    const cable = Math.cos((colFrac - 0.5) * Math.PI * 3) * 0.5 + 0.5;
-    const wave = Math.sin(row * 0.5) * 0.2;
+    const twistPhase = Math.sin(row * Math.PI * 0.5) * 0.3;
+    const twistedColFrac = (colFrac + twistPhase) % 1;
 
-    return (twist * cable + wave) * depth;
+    // Rope shape (two strands)
+    const strand1 = Math.sqrt(Math.pow((twistedColFrac - 0.25) * 4, 2) + Math.pow((rowFrac - 0.5) * 2, 2));
+    const strand2 = Math.sqrt(Math.pow((twistedColFrac - 0.75) * 4, 2) + Math.pow((rowFrac - 0.5) * 2, 2));
+
+    const rope1 = Math.max(0, 1 - strand1 * 1.5);
+    const rope2 = Math.max(0, 1 - strand2 * 1.5);
+
+    // Combine strands
+    const cable = Math.max(rope1, rope2) * 0.7;
+
+    // Add twist detail
+    const twist = Math.sin(colFrac * Math.PI * 4 + row * Math.PI * 2) * 0.1;
+
+    return (cable + twist) * depth * 0.5;
   }
 
-  // Seed stitch: Alternating knit and purl bumps
+  // Seed stitch: Alternating knit and purl in checkerboard
   static seedPattern(x, y, scale, depth) {
     const stitchW = scale;
-    const stitchH = scale;
+    const stitchH = scale * 1.4;
 
     const col = Math.floor(x / stitchW);
     const row = Math.floor(y / stitchH);
+
     const colFrac = (x / stitchW) - col;
     const rowFrac = (y / stitchH) - row;
 
@@ -183,38 +268,51 @@ class TextureGenerator {
       const dx = (colFrac - 0.5) * 2;
       const dy = (rowFrac - 0.5) * 2;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      return Math.max(0, 1 - dist * 2) * depth * 0.6;
+      return Math.max(0, 1 - dist * 2) * depth * 0.4;
     } else {
-      // Knit stitch (flat with slight texture)
-      return Math.sin(colFrac * Math.PI) * Math.sin(rowFrac * Math.PI) * depth * 0.2;
+      // Knit V
+      const centerX = colFrac - 0.5;
+      const vShape = Math.max(0, 1 - Math.abs(centerX) * 4) *
+                    Math.cos(rowFrac * Math.PI * 0.8);
+      return vShape * depth * 0.3;
     }
   }
 
-  // Garter stitch: Horizontal ridges on every row
+  // Garter stitch: Horizontal ridges on every row (both sides same)
   static garterPattern(x, y, scale, depth) {
-    const ridgeH = scale * 0.8;
+    const ridgeH = scale * 0.7;
     const rowFrac = (y / ridgeH) - Math.floor(y / ridgeH);
 
-    // Horizontal ridge
+    // Horizontal ridge (every row is knit, creates ridges)
     const ridge = Math.cos(rowFrac * Math.PI * 2) * 0.5 + 0.5;
-    return ridge * depth * 0.4;
+
+    // Light V texture within ridge
+    const stitchW = scale;
+    const colFrac = (x / stitchW) - Math.floor(x / stitchW);
+    const vTex = Math.max(0, 1 - Math.abs(colFrac - 0.5) * 4) * 0.2;
+
+    return (ridge * 0.6 + vTex) * depth * 0.3;
   }
 
-  // Shell stitch (crochet): Fan-like shell patterns
+  // Shell stitch (crochet): Fan-like shells
   static shellPattern(x, y, scale, depth) {
-    const shellW = scale * 2;
-    const shellH = scale * 1.5;
+    const shellW = scale * 2.5;
+    const shellH = scale * 1.2;
 
     const col = x / shellW;
     const row = y / shellH;
+
     const colFrac = col - Math.floor(col);
     const rowFrac = row - Math.floor(row);
 
-    // Create shell fan shape
-    const fan = Math.sin(colFrac * Math.PI * 3) * 0.5 + 0.5;
-    const wave = Math.sin(rowFrac * Math.PI);
+    // Fan shape: multiple stitches spreading out
+    const fanSpread = Math.sin(colFrac * Math.PI * 3) * 0.5 + 0.5;
+    const curve = Math.sin(rowFrac * Math.PI);
 
-    return fan * wave * depth;
+    // Shell detail: 5-7 stitches per shell
+    const detail = Math.sin(colFrac * Math.PI * 5) * Math.sin(rowFrac * Math.PI * 2) * 0.2;
+
+    return (fanSpread * curve + detail) * depth * 0.6;
   }
 
   static applyPattern(geometry, patternType, scale, depth) {
@@ -223,19 +321,6 @@ class TextureGenerator {
     const vertexCount = posAttr.count;
     const newPositions = new Float32Array(vertexCount * 3);
 
-    // We need UV mapping for proper texture - project to best fit plane
-    const box = new THREE.Box3();
-    const positions = [];
-    for (let i = 0; i < vertexCount; i++) {
-      positions.push(new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)));
-    }
-    box.setFromPoints(positions);
-
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const maxDim = Math.max(size.x, size.y, size.z);
-
-    // Project each vertex to a 2D plane based on dominant normal
     for (let i = 0; i < vertexCount; i++) {
       const px = posAttr.getX(i);
       const py = posAttr.getY(i);
@@ -244,24 +329,19 @@ class TextureGenerator {
       const ny = normalAttr.getY(i);
       const nz = normalAttr.getZ(i);
 
-      // Determine best projection plane based on normal
+      // Use the two most significant components for UV mapping
+      // This projects 3D surface to 2D based on dominant normal
+      let u, v;
       const absNx = Math.abs(nx);
       const absNy = Math.abs(ny);
       const absNz = Math.abs(nz);
 
-      let u, v;
-      if (absNx >= absNy && absNx >= absNz) {
-        // Project to YZ plane
-        u = py;
-        v = pz;
-      } else if (absNy >= absNx && absNy >= absNz) {
-        // Project to XZ plane
-        u = px;
-        v = pz;
+      if (absNx > absNy && absNx > absNz) {
+        u = py; v = pz;
+      } else if (absNy > absNx && absNy > absNz) {
+        u = px; v = pz;
       } else {
-        // Project to XY plane
-        u = px;
-        v = py;
+        u = px; v = py;
       }
 
       // Calculate pattern displacement
@@ -295,7 +375,7 @@ class TextureGenerator {
           displacement = this.knitPattern(u, v, scale, depth);
       }
 
-      // Apply displacement along normal
+      // Apply displacement along normal direction
       newPositions[i * 3] = px + nx * displacement;
       newPositions[i * 3 + 1] = py + ny * displacement;
       newPositions[i * 3 + 2] = pz + nz * displacement;
