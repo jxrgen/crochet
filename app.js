@@ -46,221 +46,57 @@ class STParser {
   }
 }
 
-// ========== Texture Generator v2 - Realistic Knit & Crochet ==========
+// ========== Texture Generator with Real Displacement Maps ==========
 class TextureGenerator {
-  
-  // ========== KNIT STITCH (Stockinette) ==========
-  // Real knit has: V-shaped stitches in vertical columns
-  // Each V is ~1.2-1.4x taller than wide
-  // Rows stack perfectly aligned
-  static knitPattern(x, y, scale, depth) {
-    const w = scale;           // stitch width
-    const h = scale * 1.3;    // stitch height (knit is taller)
+  static displacementCanvas = null;
+  static displacementCtx = null;
+  static displacementImageData = null;
+  static mapSize = 512; // Match the displacement map size
+
+  static initDisplacementMap() {
+    if (this.displacementCanvas) return;
     
-    // Get position within stitch grid
-    const col = x / w;
-    const row = y / h;
-    const colFrac = col - Math.floor(col);  // 0-1 within stitch width
-    const rowFrac = row - Math.floor(row); // 0-1 within stitch height
+    // Create canvas and load the displacement map
+    this.displacementCanvas = document.createElement('canvas');
+    this.displacementCanvas.width = this.mapSize;
+    this.displacementCanvas.height = this.mapSize;
+    this.displacementCtx = this.displacementCanvas.getContext('2d');
     
-    // V-shape: The stitch forms a V that points DOWNWARD
-    // At top of stitch (rowFrac=0), V is wide
-    // At bottom of stitch (rowFrac=1), V comes to point
-    
-    const cx = (colFrac - 0.5) * 2;  // -1 to 1, center x
-    const vy = rowFrac;                   // 0 (top) to 1 (bottom)
-    
-    // V leg position: at top (vy=0), legs are at cx = ±0.8
-    //                 at bottom (vy=1), legs meet at cx = 0
-    const vLegPos = 0.8 - vy * 0.8;  // How far from center the leg is
-    const distFromCenter = Math.abs(cx);
-    
-    let vShape = 0;
-    if (distFromCenter < vLegPos) {
-      // Inside the V - create the V shape
-      const t = distFromCenter / vLegPos;  // 0 at center, 1 at leg
-      vShape = Math.cos(t * Math.PI / 2);
-    }
-    
-    // Horizontal bar at top of stitch (where yarn runs between stitches)
-    const topBar = (vy < 0.05) ? Math.cos(vy / 0.05 * Math.PI / 2) * 0.3 : 0;
-    
-    // Column separation (valley between stitch columns)
-    const colEdge = Math.max(0, 1 - Math.abs(colFrac - 0.5) * 8) * 0.15;
-    
-    // Combine: V is raised, bar slightly raised, edges slightly lowered
-    const result = vShape * 0.9 + topBar - colEdge * 0.3;
-    
-    return (result - 0.3) * depth;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      this.displacementCtx.drawImage(img, 0, 0, this.mapSize, this.mapSize);
+      this.displacementImageData = this.displacementCtx.getImageData(0, 0, this.mapSize, this.mapSize);
+    };
+    img.src = 'displacement-maps/front.jpg'; // Use the front displacement map
   }
 
-  // ========== CROCHET STITCH (Single Crochet) ==========
-  // Real crochet: dense fabric with V tops and interlocking loops
-  // Each stitch: V at top, post going down, loop bump
-  static crochetPattern(x, y, scale, depth) {
-    const w = scale * 0.85;  // crochet stitches are narrower
-    const h = scale * 0.7;   // crochet stitches are shorter
+  static getDisplacementAt(u, v) {
+    if (!this.displacementImageData) return 0;
     
-    const col = x / w;
-    const row = y / h;
-    let colFrac = col - Math.floor(col);
-    const rowFrac = row - Math.floor(row);
-    const rowIdx = Math.floor(row);
+    // Convert UV (0-1) to pixel coordinates
+    let x = Math.floor(u * this.mapSize);
+    let y = Math.floor(v * this.mapSize);
     
-    // Offset alternate rows (crochet interlocks)
-    if (rowIdx % 2 === 1) {
-      colFrac = (colFrac + 0.5) % 1.0;
-    }
+    // Wrap around (tileable)
+    x = ((x % this.mapSize) + this.mapSize) % this.mapSize;
+    y = ((y % this.mapSize) + this.mapSize) % this.mapSize;
     
-    const cx = (colFrac - 0.5) * 2;  // -1 to 1
-    const cy = (rowFrac - 0.5) * 2;  // -1 to 1
-    
-    // === 1. V-SHAPE AT TOP (front & back loops) ===
-    // Located at rowFrac ≈ 0.15 (near top of stitch)
-    const vCenter = 0.15;
-    const vDistX = Math.abs(cx);
-    const vDistY = Math.abs(rowFrac - vCenter);
-    const vWidth = 0.35;
-    const vHeight = 0.08;
-    const vShape = (vDistX < vWidth && vDistY < vHeight) ?
-      Math.cos(vDistX / vWidth * Math.PI / 2) * Math.cos(vDistY / vHeight * Math.PI / 2) * 0.6 : 0;
-    
-    // === 2. HORIZONTAL BAR (the "third loop" behind) ===
-    const barY = 0.20;
-    const barShape = (Math.abs(cx) < 0.42 && Math.abs(rowFrac - barY) < 0.06) ?
-      Math.cos((rowFrac - barY) / 0.06 * Math.PI / 2) * Math.cos(cx / 0.42 * Math.PI / 2) * 0.5 : 0;
-    
-    // === 3. POST (vertical stem going down) ===
-    const postW = 0.18;
-    const post = (Math.abs(cx) < postW) ?
-      Math.cos(cx / postW * Math.PI / 2) * 0.35 * (1 - Math.abs(rowFrac - 0.5)) : 0;
-    
-    // === 4. MAIN LOOP BUMP ===
-    const loopDist = Math.sqrt(Math.pow(cx / 0.32, 2) + Math.pow((cy + 0.05) / 0.22, 2));
-    const loopBump = Math.max(0, 1 - loopDist * 1.7) * 0.6;
-    
-    // === 5. RIGHT LEAN (characteristic of crochet) ===
-    const lean = cx * 0.06 * Math.sin(rowFrac * Math.PI);
-    
-    const result = vShape + barShape + post + loopBump + lean;
-    return (result - 0.4) * depth;
+    const idx = (y * this.mapSize + x) * 4; // RGBA
+    const r = this.displacementImageData.data[idx];
+    // Convert 0-255 to -0.5 to 0.5 range (displacement)
+    return (r / 255.0 - 0.5) * 2.0;
   }
 
-  // ========== RIB STITCH ==========
-  static ribPattern(x, y, scale, depth) {
-    const w = scale * 0.65;
-    const h = scale * 1.3;
-    const col = x / w;
-    const colIdx = Math.floor(col);
-    const colFrac = col - colIdx;
-    const rowFrac = (y / h) - Math.floor(y / h);
-    
-    if (colIdx % 2 === 0) {
-      // Knit column (V shapes)
-      const cx = (colFrac - 0.5) * 2;
-      const vShape = Math.max(0, 1 - Math.abs(cx) * 3.5) * 0.75;
-      const bar = (rowFrac < 0.05) ? Math.cos(rowFrac / 0.05 * Math.PI / 2) * 0.25 : 0;
-      return (vShape + bar) * depth * 0.5;
-    } else {
-      // Purl column (bumpy)
-      const cx = (colFrac - 0.5) * 2;
-      const cy = (rowFrac - 0.5) * 2;
-      const dist = Math.sqrt(cx * cx * 0.7 + cy * cy * 1.3);
-      return Math.max(0, 1 - dist * 2.2) * depth * 0.45;
-    }
-  }
-
-  // ========== CABLE STITCH ==========
-  static cablePattern(x, y, scale, depth) {
-    const w = scale * 3.0;
-    const h = scale * 1.5;
-    const col = x / w;
-    const row = y / h;
-    const colFrac = col - Math.floor(col);
-    const rowFrac = row - Math.floor(row);
-    
-    const twist = Math.sin(row * Math.PI * 0.35) * 0.35;
-    const tCol = (colFrac + twist) % 1;
-    
-    const s1x = (tCol - 0.25) * 4;
-    const s2x = (tCol - 0.75) * 4;
-    const sy = (rowFrac - 0.5) * 2;
-    
-    const s1 = Math.sqrt(s1x * s1x + sy * sy);
-    const s2 = Math.sqrt(s2x * s2x + sy * sy);
-    const r1 = Math.max(0, 1 - s1 * 1.8) * 0.65;
-    const r2 = Math.max(0, 1 - s2 * 1.8) * 0.65;
-    
-    const cross = Math.abs(Math.sin(row * Math.PI * 0.5)) * Math.max(0, 1 - Math.abs(colFrac - 0.5) * 5) * 0.3;
-    
-    return Math.max(r1, r2) * depth * 0.7;
-  }
-
-  // ========== SEED STITCH ==========
-  static seedPattern(x, y, scale, depth) {
-    const w = scale * 1.1;
-    const h = scale * 1.3;
-    const col = Math.floor(x / w);
-    const row = Math.floor(y / h);
-    const colFrac = (x / w) - col;
-    const rowFrac = (y / h) - row;
-    
-    if ((col + row) % 2 === 0) {
-      // Purl bump
-      const cx = (colFrac - 0.5) * 2;
-      const cy = (rowFrac - 0.5) * 2;
-      return Math.max(0, 1 - Math.sqrt(cx * cx + cy * cy) * 2.2) * depth * 0.55;
-    } else {
-      // Knit V
-      const cx = (colFrac - 0.5) * 2;
-      const vShape = Math.max(0, 1 - Math.abs(cx) * 3.5) * Math.cos(rowFrac * Math.PI * 0.9);
-      return vShape * depth * 0.4;
-    }
-  }
-
-  // ========== GARTER STITCH ==========
-  static garterPattern(x, y, scale, depth) {
-    const h = scale * 0.65;
-    const rowFrac = (y / h) - Math.floor(y / h);
-    const ridge = (Math.cos(rowFrac * Math.PI * 2) * 0.5 + 0.5) * 0.7;
-    const w = scale * 1.1;
-    const colFrac = (x / w) - Math.floor(x / w);
-    const vTex = Math.max(0, 1 - Math.abs(colFrac - 0.5) * 5) * 0.25;
-    return (ridge + vTex) * depth * 0.4;
-  }
-
-  // ========== BOBBLE STITCH ==========
-  static bobblePattern(x, y, scale, depth) {
-    const w = scale * 1.6;
-    const h = scale * 1.6;
-    const colFrac = (x / w) - Math.floor(x / w);
-    const rowFrac = (y / h) - Math.floor(y / h);
-    const dx = (colFrac - 0.5) * 2;
-    const dy = (rowFrac - 0.5) * 2;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 0.75) {
-      return Math.cos(dist / 0.75 * Math.PI / 2) * depth * 0.95;
-    }
-    return -0.2 * depth;
-  }
-
-  // ========== SHELL STITCH ==========
-  static shellPattern(x, y, scale, depth) {
-    const w = scale * 2.3;
-    const h = scale * 1.1;
-    const colFrac = (x / w) - Math.floor(x / w);
-    const rowFrac = (y / h) - Math.floor(y / h);
-    const fan = (Math.sin((colFrac - 0.5) * Math.PI * 3) * 0.5 + 0.5) * Math.sin(rowFrac * Math.PI) * 0.75;
-    const detail = Math.sin(colFrac * Math.PI * 5) * Math.cos(rowFrac * Math.PI * 2.5) * 0.18;
-    return (fan + detail) * depth * 0.65;
-  }
-
-  // ========== APPLY TO GEOMETRY ==========
-  static applyPattern(geometry, patternType, scale, depth) {
+  // Apply real displacement map to geometry
+  static applyRealDisplacement(geometry, scale, depth) {
     const posAttr = geometry.attributes.position;
     const normalAttr = geometry.attributes.normal;
     const vertexCount = posAttr.count;
     const newPositions = new Float32Array(vertexCount * 3);
+
+    // Initialize displacement map if not already done
+    this.initDisplacementMap();
 
     for (let i = 0; i < vertexCount; i++) {
       const px = posAttr.getX(i);
@@ -275,22 +111,64 @@ class TextureGenerator {
       const absNx = Math.abs(nx);
       const absNy = Math.abs(ny);
       const absNz = Math.abs(nz);
-      
+
+      if (absNx > absNy && absNx > absNz) { u = py; v = pz; }
+      else if (absNy > absNx && absNy > absNz) { u = px; v = pz; }
+      else { u = px; v = py; }
+
+      // Convert to 0-1 range (tileable)
+      u = (u / scale) % 1.0;
+      v = (v / scale) % 1.0;
+      if (u < 0) u += 1.0;
+      if (v < 0) v += 1.0;
+
+      // Get displacement from map
+      const displacement = this.getDisplacementAt(u, v) * depth;
+
+      newPositions[i * 3] = px + nx * displacement;
+      newPositions[i * 3 + 1] = py + ny * displacement;
+      newPositions[i * 3 + 2] = pz + nz * displacement;
+    }
+
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+    geometry.computeVertexNormals();
+    return geometry;
+  }
+
+  // Fallback procedural patterns (if displacement map not loaded)
+  static applyPattern(geometry, patternType, scale, depth) {
+    const posAttr = geometry.attributes.position;
+    const normalAttr = geometry.attributes.normal;
+    const vertexCount = posAttr.count;
+    const newPositions = new Float32Array(vertexCount * 3);
+
+    for (let i = 0; i < vertexCount; i++) {
+      const px = posAttr.getX(i);
+      const py = posAttr.getY(i);
+      const pz = posAttr.getZ(i);
+      const nx = normalAttr.getX(i);
+      const ny = normalAttr.getY(i);
+      const nz = normalAttr.getZ(i);
+
+      let u, v;
+      const absNx = Math.abs(nx);
+      const absNy = Math.abs(ny);
+      const absNz = Math.abs(nz);
+
       if (absNx > absNy && absNx > absNz) { u = py; v = pz; }
       else if (absNy > absNx && absNy > absNz) { u = px; v = pz; }
       else { u = px; v = py; }
 
       let displacement = 0;
       switch (patternType) {
-        case 'knit': displacement = this.knitPattern(u, v, scale, depth); break;
-        case 'crochet': displacement = this.crochetPattern(u, v, scale, depth); break;
-        case 'rib': displacement = this.ribPattern(u, v, scale, depth); break;
-        case 'cable': displacement = this.cablePattern(u, v, scale, depth); break;
-        case 'seed': displacement = this.seedPattern(u, v, scale, depth); break;
-        case 'garter': displacement = this.garterPattern(u, v, scale, depth); break;
-        case 'bobble': displacement = this.bobblePattern(u, v, scale, depth); break;
-        case 'shell': displacement = this.shellPattern(u, v, scale, depth); break;
-        default: displacement = this.knitPattern(u, v, scale, depth);
+        case 'knit':
+          displacement = this.simpleKnit(u, v, scale, depth);
+          break;
+        case 'crochet':
+          displacement = this.simpleCrochet(u, v, scale, depth);
+          break;
+        default:
+          displacement = this.simpleKnit(u, v, scale, depth);
       }
 
       newPositions[i * 3] = px + nx * displacement;
@@ -301,6 +179,66 @@ class TextureGenerator {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
     geometry.computeVertexNormals();
     return geometry;
+  }
+
+  // Simple fallback knit pattern
+  static simpleKnit(x, y, scale, depth) {
+    const w = scale;
+    const h = scale * 1.3;
+    const col = x / w;
+    const row = y / h;
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+
+    const cx = (colFrac - 0.5) * 2;
+    const vy = rowFrac;
+    const vLegPos = 0.8 - vy * 0.8;
+    const distFromCenter = Math.abs(cx);
+
+    let vShape = 0;
+    if (distFromCenter < vLegPos) {
+      const t = distFromCenter / vLegPos;
+      vShape = Math.cos(t * Math.PI / 2);
+    }
+
+    const topBar = (vy < 0.05) ? Math.cos(vy / 0.05 * Math.PI / 2) * 0.3 : 0;
+    const colEdge = Math.max(0, 1 - Math.abs(colFrac - 0.5) * 8) * 0.15;
+
+    return (vShape * 0.9 + topBar - colEdge * 0.3 - 0.3) * depth;
+  }
+
+  // Simple fallback crochet pattern
+  static simpleCrochet(x, y, scale, depth) {
+    const w = scale * 0.85;
+    const h = scale * 0.7;
+    const col = x / w;
+    const row = y / h;
+    let colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+    const rowIdx = Math.floor(row);
+
+    if (rowIdx % 2 === 1) {
+      colFrac = (colFrac + 0.5) % 1.0;
+    }
+
+    const cx = (colFrac - 0.5) * 2;
+    const cy = (rowFrac - 0.5) * 2;
+
+    // V-shape at top
+    const vY = 0.15;
+    const vDistX = Math.abs(cx);
+    const vDistY = Math.abs(rowFrac - vY);
+    const vShape = (vDistX < 0.38 && vDistY < 0.09) ?
+      Math.cos(vDistX / 0.38 * Math.PI / 2) * Math.cos(vDistY / 0.09 * Math.PI / 2) * 0.6 : 0;
+
+    // Loop bump
+    const loopDist = Math.sqrt(Math.pow(cx / 0.32, 2) + Math.pow((cy + 0.05) / 0.22, 2));
+    const loopBump = Math.max(0, 1 - loopDist * 1.7) * 0.6;
+
+    // Lean
+    const lean = cx * 0.07 * Math.sin(rowFrac * Math.PI);
+
+    return (vShape + loopBump + lean - 0.4) * depth;
   }
 }
 
@@ -316,43 +254,67 @@ class STLExporter {
     view.setUint32(80, triangleCount, true);
 
     for (let i = 0; i < triangleCount; i++) {
-      const off = 84 + i * 50;
+      const offset = 84 + i * 50;
       const i3 = i * 9;
+
       if (geometry.attributes.normal) {
-        view.setFloat32(off, geometry.attributes.normal.getX(i3), true);
-        view.setFloat32(off + 4, geometry.attributes.normal.getY(i3), true);
-        view.setFloat32(off + 8, geometry.attributes.normal.getZ(i3), true);
+        view.setFloat32(offset, geometry.attributes.normal.getX(i3), true);
+        view.setFloat32(offset + 4, geometry.attributes.normal.getY(i3), true);
+        view.setFloat32(offset + 8, geometry.attributes.normal.getZ(i3), true);
       }
+
       for (let v = 0; v < 3; v++) {
-        const vo = off + 12 + v * 12;
+        const vo = offset + 12 + v * 12;
         view.setFloat32(vo, posAttr.getX(i3 + v * 3), true);
         view.setFloat32(vo + 4, posAttr.getY(i3 + v * 3), true);
         view.setFloat32(vo + 8, posAttr.getZ(i3 + v * 3), true);
       }
-      view.setUint16(off + 48, 0, true);
+      view.setUint16(offset + 48, 0, true);
     }
     return buffer;
   }
 }
 
-// ========== App ==========
-let scene, camera, renderer, controls, currentMesh, originalGeometry;
+// ========== App State ==========
+let scene, camera, renderer, controls;
+let currentMesh = null;
+let originalGeometry = null;
 
+// ========== Three.js Init ==========
 function initViewer() {
-  const c = document.getElementById('viewer');
-  scene = new THREE.Scene(); scene.background = new THREE.Color(0x0f0f1a);
-  camera = new THREE.PerspectiveCamera(45, c.clientWidth / c.clientHeight, 0.1, 1000);
+  const container = document.getElementById('viewer');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f0f1a);
+
+  camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
   camera.position.set(50, 50, 50);
+
   renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(c.clientWidth, c.clientHeight);
-  c.appendChild(renderer.domElement);
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
+
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+
   scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-  const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(50, 100, 50); scene.add(dl);
+  const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+  dl.position.set(50, 100, 50);
+  scene.add(dl);
+
   scene.add(new THREE.GridHelper(100, 20, 0x333333, 0x222222));
-  window.addEventListener('resize', () => { camera.aspect = c.clientWidth / c.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(c.clientWidth, c.clientHeight); });
-  (function anim() { requestAnimationFrame(anim); controls.update(); renderer.render(scene, camera); })();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  });
+
+  (function anim() {
+    requestAnimationFrame(anim);
+    controls.update();
+    renderer.render(scene, camera);
+  })();
 }
 
 function handleFile(file) {
@@ -377,12 +339,16 @@ function loadGeometry(vertices, normals) {
   if (normals) geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   geo.computeVertexNormals();
   originalGeometry = geo.clone();
-  currentMesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({ color: 0xe94560, specular: 0x222222, shininess: 30, side: THREE.DoubleSide }));
+  currentMesh = new THREE.Mesh(geo, new THREE.MeshPhongMaterial({
+    color: 0xe94560, specular: 0x222222, shininess: 30, side: THREE.DoubleSide
+  }));
   scene.add(currentMesh);
   const box = new THREE.Box3().setFromObject(currentMesh);
   const cen = box.getCenter(new THREE.Vector3());
-  camera.position.copy(cen).add(new THREE.Vector3(box.getSize(new THREE.Vector3()).max(), box.getSize(new THREE.Vector3()).max(), box.getSize(new THREE.Vector3()).max()));
-  controls.target.copy(cen); controls.update();
+  const size = box.getSize(new THREE.Vector3());
+  camera.position.copy(cen).add(new THREE.Vector3(size.x, size.y, size.z));
+  controls.target.copy(cen);
+  controls.update();
 }
 
 function applyTexture() {
@@ -394,10 +360,19 @@ function applyTexture() {
   setTimeout(() => {
     try {
       const geo = originalGeometry.clone();
-      TextureGenerator.applyPattern(geo, type, scale, depth);
+      // Use real displacement map for knit, fallback for others
+      if (type === 'knit') {
+        TextureGenerator.applyRealDisplacement(geo, scale, depth);
+      } else {
+        TextureGenerator.applyPattern(geo, type, scale, depth);
+      }
       currentMesh.geometry.dispose();
       currentMesh.geometry = geo;
-      const colors = { 'knit': 0xe94560, 'crochet': 0xf4a460, 'rib': 0x3498db, 'cable': 0x2ecc71, 'seed': 0xe67e22, 'garter': 0x1abc9c, 'bobble': 0x9b59b6, 'shell': 0xf39c12 };
+      const colors = {
+        'knit': 0xe94560, 'crochet': 0xf4a460, 'rib': 0x3498db,
+        'cable': 0x2ecc71, 'seed': 0xe67e22, 'garter': 0x1abc9c,
+        'bobble': 0x9b59b6, 'shell': 0xf39c12
+      };
       currentMesh.material.color.setHex(colors[type] || 0xe94560);
       showStatus('Tekstur anvendt!', 'success');
       document.getElementById('downloadBtn').disabled = false;
@@ -411,13 +386,17 @@ function downloadSTL() {
     const b = STLExporter.exportBinary(currentMesh.geometry);
     const blob = new Blob([b], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'crothet_output.stl'; a.click();
-    URL.revokeObjectURL(url); showStatus('Downloadet!', 'success');
+    const a = document.createElement('a');
+    a.href = url; a.download = 'crothet_output.stl';
+    a.click();
+    URL.revokeObjectURL(url);
+    showStatus('Downloadet!', 'success');
   } catch (err) { showStatus('Fejl: ' + err.message, 'error'); }
 }
 
 function showStatus(msg, type) {
-  const s = document.getElementById('status'); s.textContent = msg; s.className = type;
+  const s = document.getElementById('status');
+  s.textContent = msg; s.className = type;
   if (type === 'success') setTimeout(() => { s.style.display = 'none'; }, 3000);
 }
 
@@ -428,7 +407,10 @@ document.addEventListener('DOMContentLoaded', () => {
   ua.addEventListener('click', () => fi.click());
   ua.addEventListener('dragover', (e) => { e.preventDefault(); ua.style.borderColor = '#ff6b81'; });
   ua.addEventListener('dragleave', () => { ua.style.borderColor = '#e94560'; });
-  ua.addEventListener('drop', (e) => { e.preventDefault(); ua.style.borderColor = '#e94560'; if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+  ua.addEventListener('drop', (e) => {
+    e.preventDefault(); ua.style.borderColor = '#e94560';
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
   fi.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
   document.getElementById('applyBtn').addEventListener('click', applyTexture);
   document.getElementById('downloadBtn').addEventListener('click', downloadSTL);
