@@ -217,6 +217,125 @@ class TextureGenerator {
     return (result - 0.3) * depth;
   }
 
+    // Rib stitch: Alternating knit and purl columns (vertical ribs)
+  // Creates stretchy, textured vertical columns
+  static ribPattern(x, y, scale, depth) {
+    const ribW = scale * 0.65;
+    const stitchH = scale * 1.4;
+    
+    const col = x / ribW;
+    const colIdx = Math.floor(col);
+    const colFrac = col - colIdx;
+    
+    const isKnitCol = (colIdx % 2) === 0;
+    
+    if (isKnitCol) {
+      // Knit column: V-shapes stacked
+      const row = y / stitchH;
+      const rowFrac = row - Math.floor(row);
+      
+      const centerX = colFrac - 0.5;
+      const vShape = Math.max(0, 1 - Math.abs(centerX) * 4) * 0.7;
+      const rowBar = Math.max(0, 1 - Math.abs(rowFrac - 0.1) * 12) * 0.3;
+      
+      return (vShape + rowBar) * depth * 0.5;
+    } else {
+      // Purl column: bumpy texture
+      const row = y / stitchH;
+      const rowFrac = row - Math.floor(row);
+      const centerX = (colFrac - 0.5) * 2;
+      const centerY = (rowFrac - 0.5) * 2;
+      const dist = Math.sqrt(centerX * centerX + centerY * centerY * 0.5);
+      const purlBump = Math.max(0, 1 - dist * 2) * 0.6;
+      
+      return purlBump * depth * 0.4;
+    }
+  }
+
+  // Cable stitch: Twisted ropes (complex intertwining)
+  // Creates beautiful rope-like patterns with crossings
+  static cablePattern(x, y, scale, depth) {
+    const cableW = scale * 3.0;
+    const cableH = scale * 1.5;
+    
+    const col = x / cableW;
+    const row = y / cableH;
+    
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+    
+    // Create twisting effect
+    const twistPhase = Math.sin(row * Math.PI * 0.3) * 0.4;
+    const twistedCol = (colFrac + twistPhase) % 1;
+    
+    // Two strands that twist around each other
+    const strand1X = (twistedCol - 0.25) * 4;
+    const strand2X = (twistedCol - 0.75) * 4;
+    const strandY = (rowFrac - 0.5) * 2;
+    
+    const strand1 = Math.sqrt(strand1X * strand1X + strandY * strandY);
+    const strand2 = Math.sqrt(strand2X * strand2X + strandY * strandY);
+    
+    const rope1 = Math.max(0, 1 - strand1 * 1.8) * 0.6;
+    const rope2 = Math.max(0, 1 - strand2 * 1.8) * 0.6;
+    
+    // Crossing points (where cables cross)
+    const crossPoint = Math.abs(Math.sin(row * Math.PI * 0.5));
+    const crossing = crossPoint * Math.max(0, 1 - Math.abs(colFrac - 0.5) * 6) * 0.3;
+    
+    // Twist detail
+    const twistDetail = Math.sin(colFrac * Math.PI * 6 + row * Math.PI * 2) * 0.1;
+    
+    const result = Math.max(rope1, rope2) + crossing + twistDetail;
+    return result * depth * 0.6;
+  }
+
+  // Seed stitch: Alternating knit and purl in checkerboard
+  // Creates a bumpy, textured fabric
+  static seedPattern(x, y, scale, depth) {
+    const stitchW = scale;
+    const stitchH = scale * 1.4;
+    
+    const col = Math.floor(x / stitchW);
+    const row = Math.floor(y / stitchH);
+    
+    const colFrac = (x / stitchW) - col;
+    const rowFrac = (y / stitchH) - row;
+    
+    const isPurl = (col + row) % 2 === 0;
+    
+    if (isPurl) {
+      // Purl bump
+      const dx = (colFrac - 0.5) * 2;
+      const dy = (rowFrac - 0.5) * 2;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      return Math.max(0, 1 - dist * 2) * depth * 0.5;
+    } else {
+      // Knit V
+      const centerX = colFrac - 0.5;
+      const vShape = Math.max(0, 1 - Math.abs(centerX) * 4) *
+                    Math.cos(rowFrac * Math.PI * 0.8);
+      return vShape * depth * 0.4;
+    }
+  }
+
+  // Garter stitch: Horizontal ridges on every row
+  // Both sides look the same (all rows are knit)
+  static garterPattern(x, y, scale, depth) {
+    const ridgeH = scale * 0.65;
+    const rowFrac = (y / ridgeH) - Math.floor(y / ridgeH);
+    
+    // Horizontal ridge (every row creates a ridge)
+    const ridge = Math.cos(rowFrac * Math.PI * 2) * 0.5 + 0.5;
+    
+    // Light V texture within ridge
+    const stitchW = scale;
+    const colFrac = (x / stitchW) - Math.floor(x / stitchW);
+    const vTex = Math.max(0, 1 - Math.abs(colFrac - 0.5) * 4) * 0.2;
+    
+    return (ridge * 0.7 + vTex) * depth * 0.35;
+  }
+
   // Apply pattern to geometry
   static applyPattern(geometry, patternType, scale, depth) {
     const posAttr = geometry.attributes.position;
@@ -253,6 +372,18 @@ class TextureGenerator {
           break;
         case 'crochet':
           displacement = this.crochetPattern(u, v, scale, depth);
+          break;
+        case 'rib':
+          displacement = this.ribPattern(u, v, scale, depth);
+          break;
+        case 'cable':
+          displacement = this.cablePattern(u, v, scale, depth);
+          break;
+        case 'seed':
+          displacement = this.seedPattern(u, v, scale, depth);
+          break;
+        case 'garter':
+          displacement = this.garterPattern(u, v, scale, depth);
           break;
         default:
           displacement = this.knitPattern(u, v, scale, depth);
