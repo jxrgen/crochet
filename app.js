@@ -142,79 +142,118 @@ class TextureGenerator {
     return (result - 0.2) * depth; // Center around 0
   }
 
-  // Crochet pattern (Single Crochet) - Iteration 2
-  // Research: Dense fabric with interlocking loops
-  // Each stitch: V top + horizontal bar (front/back loops) + post + bump
-  // Key insight: Stitches lean right (right-handed) and form dense fabric
+  // Crochet pattern - Iteration 4
+  // Improved: Proper loop structure with front/back loops and post
+  // Research: Single crochet = compact, V top, dense fabric
   static crochetPattern(x, y, scale, depth) {
-    const stitchWidth = scale * 0.85;
-    const stitchHeight = scale * 0.7; // Crochet is denser/shorter
+    const stitchW = scale *0.9;
+    const stitchH = scale *0.75;
     
-    const col = x / stitchWidth;
-    const row = y / stitchHeight;
-    
+    const col = x / stitchW;
+    const row = y / stitchH;
     const colIdx = Math.floor(col);
     const rowIdx = Math.floor(row);
-    
-    const colFrac = col - colIdx;
+    let colFrac = col - colIdx;
     const rowFrac = row - rowIdx;
     
-    // Single crochet structure:
-    // - V at top (front loop + back loop = V shape)
-    // - Horizontal bar below V (the "run" of yarn)
-    // - Post (vertical part going down to stitch below)
-    // - Slight right lean (characteristic of crochet)
+    // Offset every other row (interlocking)
+    if ((rowIdx % 2) ===1) {
+      colFrac = (colFrac + 0.5) % 1.0;
+    }
     
-    const isEvenRow = (rowIdx % 2) === 0;
-    // Offset alternate rows for interlocking
-    const offsetCol = isEvenRow ? colFrac : (colFrac + 0.5) % 1.0;
-    const centerX = (offsetCol - 0.5) * 2; // -1 to 1
-    const centerY = (rowFrac - 0.5) * 2; // -1 to 1
+    const cx = (colFrac - 0.5) * 2; // -1..1
+    const cy = (rowFrac - 0.5) * 2; // -1..1
     
-    // === V-SHAPE AT TOP (where hook goes through both loops) ===
-    // The V is at ~15% from top of stitch
-    const vCenter = 0.15;
-    const vDist = Math.abs(centerX);
-    const vHeight = Math.abs(rowFrac - vCenter);
-    const vShape = (vDist < 0.4 && vHeight < 0.1) ? 
-      Math.cos(vDist / 0.4 * Math.PI / 2) * Math.cos(vHeight / 0.1 * Math.PI / 2) * 0.6 : 0;
+    // === 1. V-SHAPE (top of stitch - front & back loops) ===
+    // Located at rowFrac ≈ 0.12 (near top)
+    const vTop = 0.12;
+    const vWidth = 0.35;
+    const vHeight = 0.08;
+    const vx = Math.abs(cx);
+    const vy = Math.abs(rowFrac - vTop);
+    const vShape = (vx < vWidth && vy < vHeight) ?
+      Math.cos(vx / vWidth * Math.PI / 2) * Math.cos(vy / vHeight * Math.PI / 2) * 0.7 : 0;
     
-    // === HORIZONTAL BAR (the "bump" behind the V) ===
-    // This is the yarn that runs behind the stitch
-    const barY = 0.2;
-    const barDist = Math.abs(rowFrac - barY);
-    const barShape = (Math.abs(centerX) < 0.45) && barDist < 0.08 ?
-      Math.cos((rowFrac - barY) / 0.08 * Math.PI / 2) * 0.4 : 0;
+    // === 2. HORIZONTAL BAR (back loop / "third loop") ===
+    // Creates the horizontal line you see on crochet fabric
+    const barY = 0.18;
+    const bar = (Math.abs(cx) < 0.42 && Math.abs(rowFrac - barY) < 0.06) ?
+      Math.cos((rowFrac - barY) / 0.06 * Math.PI / 2) * 
+      Math.cos(cx / 0.42 * Math.PI / 2) * 0.5 : 0;
     
-    // === POST (vertical part going down) ===
-    // The body of the stitch, narrower
-    const postWidth = 0.2;
-    const postX = Math.abs(centerX);
-    const post = (postX < postWidth) ?
-      Math.cos(postX / postWidth * Math.PI / 2) * 0.3 * (1 - Math.abs(rowFrac - 0.5)) : 0;
+    // === 3. POST (vertical stem) ===
+    const postW = 0.18;
+    const post = (Math.abs(cx) < postW) ?
+      Math.cos(cx / postW * Math.PI / 2) * 0.35 * (1 - Math.abs(rowFrac - 0.5)) : 0;
     
-    // === LOOP BUMP (the main body of stitch) ===
-    // Oval shape representing the actual yarn loop
-    const loopRx = 0.35;
-    const loopRy = 0.25;
+    // === 4. MAIN LOOP (yarn loop) ===
+    // Oval bump representing the actual loop
     const loopDist = Math.sqrt(
-      Math.pow(centerX / loopRx, 2) + 
-      Math.pow((centerY + 0.1) / loopRy, 2)
+      Math.pow(cx / 0.33, 2) + 
+      Math.pow((cy + 0.05) / 0.22, 2)
     );
-    const loopBump = Math.max(0, 1 - loopDist * 1.8) * 0.5;
+    const loop = Math.max(0, 1 - loopDist * 1.6) * 0.6;
     
-    // === RIGHT LEAN (characteristic of crochet) ===
-    const lean = centerX * 0.08 * Math.sin(rowFrac * Math.PI);
+    // === 5. RIGHT LEAN (characteristic of crochet) ===
+    const lean = cx * 0.06 * Math.sin(rowFrac * Math.PI);
     
-    // === INTERLOCKING: Connect to stitch below ===
-    // At bottom of stitch (rowFrac ~ 0.8-1.0), connect to next row
-    const connectZone = Math.max(0, (rowFrac - 0.7) / 0.3);
-    const connection = connectZone * Math.max(0, 1 - Math.abs(centerX) * 2) * 0.2;
+    // === 6. INTERLOCK (connection to stitch below) ===
+    const interlock = (rowFrac > 0.75) ?
+      Math.max(0, 1 - (rowFrac - 0.75) / 0.25) * 
+      Math.max(0, 1 - Math.abs(cx)) * 0.25 : 0;
     
-    // Combine all elements
-    const result = vShape + barShape + post + loopBump + lean + connection;
+    const result = vShape + bar + post + loop + lean + interlock;
+    return (result - 0.35) * depth;
+  }
+
+  // Bobble stitch (crochet): Group of stitches in same stitch
+  // Creates raised, textured bobbles
+  static bobblePattern(x, y, scale, depth) {
+    const bobbleW = scale * 1.5;
+    const bobbleH = scale * 1.5;
     
-    return (result - 0.3) * depth;
+    const col = x / bobbleW;
+    const row = y / bobbleH;
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+    
+    // Bobble is a raised hemisphere of yarn
+    const dx = (colFrac - 0.5) * 2;
+    const dy = (rowFrac - 0.5) * 2;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist < 0.7) {
+      // Multiple stitches clustered = bobble
+      const bobble = Math.cos(dist / 0.7 * Math.PI / 2);
+      return bobble * depth * 0.9;
+    }
+    // Fabric between bobbles
+    return -0.15 * depth;
+  }
+
+  // Shell stitch (crochet): Fan-like pattern
+  // Creates decorative shell patterns
+  static shellPattern(x, y, scale, depth) {
+    const shellW = scale * 2.2;
+    const shellH = scale * 1.0;
+    
+    const col = x / shellW;
+    const row = y / shellH;
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+    
+    // Fan shape: multiple stitches spreading from center
+    const fanCenter = 0.5;
+    const fanSpread = Math.sin((colFrac - fanCenter) * Math.PI * 3) * 0.5 + 0.5;
+    const fanCurve = Math.sin(rowFrac * Math.PI);
+    
+    // Shell body
+    const shell = fanSpread * fanCurve * 0.7;
+    
+    // Decorative detail
+    const detail = Math.sin(colFrac * Math.PI * 4) * Math.cos(rowFrac * Math.PI * 2) * 0.15;
+    
+    return (shell + detail) * depth * 0.6;
   }
 
     // Rib stitch: Alternating knit and purl columns (vertical ribs)
