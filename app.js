@@ -142,12 +142,13 @@ class TextureGenerator {
     return (result - 0.2) * depth; // Center around 0
   }
 
-  // Crochet pattern (Single Crochet) - Iteration 1
-  // Research: Dense fabric, V top, interlocking loops, shorter than knit
-  // Stitch ratio: width : height ≈ 1 : 0.85
+  // Crochet pattern (Single Crochet) - Iteration 2
+  // Research: Dense fabric with interlocking loops
+  // Each stitch: V top + horizontal bar (front/back loops) + post + bump
+  // Key insight: Stitches lean right (right-handed) and form dense fabric
   static crochetPattern(x, y, scale, depth) {
-    const stitchWidth = scale * 0.9;
-    const stitchHeight = scale * 0.75; // Crochet stitches are shorter
+    const stitchWidth = scale * 0.85;
+    const stitchHeight = scale * 0.7; // Crochet is denser/shorter
     
     const col = x / stitchWidth;
     const row = y / stitchHeight;
@@ -158,39 +159,62 @@ class TextureGenerator {
     const colFrac = col - colIdx;
     const rowFrac = row - rowIdx;
     
-    // Single crochet has a V top and a post (vertical part)
-    // Rows are offset (every other row shifts by half stitch)
-    const isEvenRow = (rowIdx % 2) === 0;
-    const offsetColFrac = isEvenRow ? colFrac : (colFrac + 0.5) % 1.0;
+    // Single crochet structure:
+    // - V at top (front loop + back loop = V shape)
+    // - Horizontal bar below V (the "run" of yarn)
+    // - Post (vertical part going down to stitch below)
+    // - Slight right lean (characteristic of crochet)
     
-    const centerX = (offsetColFrac - 0.5) * 2; // -1 to 1
+    const isEvenRow = (rowIdx % 2) === 0;
+    // Offset alternate rows for interlocking
+    const offsetCol = isEvenRow ? colFrac : (colFrac + 0.5) % 1.0;
+    const centerX = (offsetCol - 0.5) * 2; // -1 to 1
     const centerY = (rowFrac - 0.5) * 2; // -1 to 1
     
-    // Main loop shape (oval)
+    // === V-SHAPE AT TOP (where hook goes through both loops) ===
+    // The V is at ~15% from top of stitch
+    const vCenter = 0.15;
+    const vDist = Math.abs(centerX);
+    const vHeight = Math.abs(rowFrac - vCenter);
+    const vShape = (vDist < 0.4 && vHeight < 0.1) ? 
+      Math.cos(vDist / 0.4 * Math.PI / 2) * Math.cos(vHeight / 0.1 * Math.PI / 2) * 0.6 : 0;
+    
+    // === HORIZONTAL BAR (the "bump" behind the V) ===
+    // This is the yarn that runs behind the stitch
+    const barY = 0.2;
+    const barDist = Math.abs(rowFrac - barY);
+    const barShape = (Math.abs(centerX) < 0.45) && barDist < 0.08 ?
+      Math.cos((rowFrac - barY) / 0.08 * Math.PI / 2) * 0.4 : 0;
+    
+    // === POST (vertical part going down) ===
+    // The body of the stitch, narrower
+    const postWidth = 0.2;
+    const postX = Math.abs(centerX);
+    const post = (postX < postWidth) ?
+      Math.cos(postX / postWidth * Math.PI / 2) * 0.3 * (1 - Math.abs(rowFrac - 0.5)) : 0;
+    
+    // === LOOP BUMP (the main body of stitch) ===
+    // Oval shape representing the actual yarn loop
+    const loopRx = 0.35;
+    const loopRy = 0.25;
     const loopDist = Math.sqrt(
-      centerX * centerX * 1.2 + 
-      centerY * centerY * 0.8
+      Math.pow(centerX / loopRx, 2) + 
+      Math.pow((centerY + 0.1) / loopRy, 2)
     );
-    const loopShape = Math.max(0, 1 - loopDist * 1.5);
+    const loopBump = Math.max(0, 1 - loopDist * 1.8) * 0.5;
     
-    // V shape at top of stitch (where you insert hook)
-    const vTop = Math.max(0, 1 - Math.abs(offsetColFrac - 0.5) * 4) * 
-                 Math.max(0, 1 - Math.abs(rowFrac - 0.15) * 10) * 0.5;
+    // === RIGHT LEAN (characteristic of crochet) ===
+    const lean = centerX * 0.08 * Math.sin(rowFrac * Math.PI);
     
-    // Post (vertical part of stitch)
-    const postWidth = 0.15;
-    const postX = Math.abs(offsetColFrac - 0.5) * 2;
-    const post = (postX < postWidth) ? 
-      Math.cos(postX / postWidth * Math.PI / 2) * 0.4 * (1 - Math.abs(rowFrac - 0.5)) : 0;
+    // === INTERLOCKING: Connect to stitch below ===
+    // At bottom of stitch (rowFrac ~ 0.8-1.0), connect to next row
+    const connectZone = Math.max(0, (rowFrac - 0.7) / 0.3);
+    const connection = connectZone * Math.max(0, 1 - Math.abs(centerX) * 2) * 0.2;
     
-    // Horizontal bar (the "chain" connecting stitches)
-    const hBar = Math.max(0, 1 - Math.abs(rowFrac - 0.9) * 15) *
-                 Math.max(0, 1 - Math.abs(offsetColFrac - 0.5) * 3) * 0.3;
+    // Combine all elements
+    const result = vShape + barShape + post + loopBump + lean + connection;
     
-    // Combine: loop + V + post + bar
-    const result = loopShape * 0.5 + vTop + post + hBar;
-    
-    return (result - 0.25) * depth;
+    return (result - 0.3) * depth;
   }
 
   // Apply pattern to geometry
