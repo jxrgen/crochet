@@ -52,11 +52,14 @@
         <div class="control">
           <label for="patternType">Vælg mønster</label>
           <select id="patternType">
-            <option value="knit">Strikket</option>
-            <option value="crochet">Hæklet</option>
+            <option value="knit">Strikket (Stockinette)</option>
+            <option value="crochet">Hæklet (Loop)</option>
             <option value="bobble">Bobbel</option>
             <option value="rib">Rib</option>
             <option value="cable">Kabel</option>
+            <option value="seed">Seed Stitch</option>
+            <option value="garter">Garter Stitch</option>
+            <option value="shell">Shell Stitch (Hæklet)</option>
           </select>
         </div>
       </div>
@@ -73,7 +76,8 @@
         </div>
         <div class="control">
           <label for="resolution">Opløsning <span class="value" id="resolutionValue">50</span></label>
-          <input type="range" id="resolution" min="10" max="100" step="5" value="50">
+          <input type="range" id="resolution" min="10" max="100" step="5" value="50" disabled>
+          <small style="color:#666">Bruges ikke længere</small>
         </div>
       </div>
 

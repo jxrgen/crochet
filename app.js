@@ -3,7 +3,7 @@ class STParser {
   static parse(arrayBuffer) {
     const view = new DataView(arrayBuffer);
     const header = new TextDecoder().decode(new Uint8Array(arrayBuffer, 0, 5));
-    
+
     if (header.includes('solid')) {
       return this.parseASCII(new TextDecoder().decode(new Uint8Array(arrayBuffer)));
     }
@@ -41,10 +41,10 @@ class STParser {
     const normals = [];
     const normalRegex = /normal\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)/;
     const vertexRegex = /vertex\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)/;
-    
+
     const lines = text.split('\n');
     let currentNormal = [0, 0, 0];
-    
+
     for (const line of lines) {
       const nMatch = line.match(normalRegex);
       if (nMatch) {
@@ -62,126 +62,243 @@ class STParser {
 
 // ========== Texture Generator ==========
 class TextureGenerator {
-  static applyKnitPattern(geometry, scale, depth, resolution) {
-    const posAttr = geometry.attributes.position;
-    const normalAttr = geometry.attributes.normal;
-    const vertexCount = posAttr.count;
-    const newPositions = new Float32Array(vertexCount * 3);
+  // Knit pattern: Stockinette stitch with alternating rows of v-shaped stitches
+  static knitPattern(x, y, scale, depth) {
+    const stitchW = scale;
+    const stitchH = scale * 1.2;
 
-    for (let i = 0; i < vertexCount; i++) {
-      const x = posAttr.getX(i);
-      const y = posAttr.getY(i);
-      const z = posAttr.getZ(i);
-      const nx = normalAttr.getX(i);
-      const ny = normalAttr.getY(i);
-      const nz = normalAttr.getZ(i);
+    // Map to stitch grid
+    const col = x / stitchW;
+    const row = y / stitchH;
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+    const isEvenRow = Math.floor(row) % 2 === 0;
 
-      const u = x / scale;
-      const v = y / scale;
-      const pattern = this.knitNoise(u, v, resolution);
+    // Create v-shaped knit stitch
+    const centerX = isEvenRow ? colFrac : 1 - colFrac;
+    const vShape = Math.max(0, 1 - Math.abs(centerX * 2 - 1) * 1.5);
+    const rowWave = Math.sin(rowFrac * Math.PI);
+    const stitch = vShape * rowWave;
 
-      newPositions[i * 3] = x + nx * pattern * depth;
-      newPositions[i * 3 + 1] = y + ny * pattern * depth;
-      newPositions[i * 3 + 2] = z + nz * pattern * depth;
-    }
-
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
-    geometry.computeVertexNormals();
-    return geometry;
+    return stitch * depth;
   }
 
-  static applyCrochetPattern(geometry, scale, depth, resolution) {
-    const posAttr = geometry.attributes.position;
-    const normalAttr = geometry.attributes.normal;
-    const vertexCount = posAttr.count;
-    const newPositions = new Float32Array(vertexCount * 3);
+  // Crochet pattern: Interlocking loops arranged in offset rows
+  static crochetPattern(x, y, scale, depth) {
+    const loopW = scale * 0.8;
+    const loopH = scale * 0.7;
 
-    for (let i = 0; i < vertexCount; i++) {
-      const x = posAttr.getX(i);
-      const y = posAttr.getY(i);
-      const z = posAttr.getZ(i);
-      const nx = normalAttr.getX(i);
-      const ny = normalAttr.getY(i);
-      const nz = normalAttr.getZ(i);
+    const col = x / loopW;
+    const row = y / loopH;
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+    const isEvenRow = Math.floor(row) % 2 === 0;
 
-      const u = x / scale;
-      const v = y / scale;
-      const pattern = this.crochetNoise(u, v, resolution);
+    // Offset for even rows (crochet stitch offset)
+    const offsetFrac = isEvenRow ? colFrac : (colFrac + 0.5) % 1;
 
-      newPositions[i * 3] = x + nx * pattern * depth;
-      newPositions[i * 3 + 1] = y + ny * pattern * depth;
-      newPositions[i * 3 + 2] = z + nz * pattern * depth;
-    }
+    // Circular loop shape
+    const dx = (offsetFrac - 0.5) * 2;
+    const dy = (rowFrac - 0.5) * 2;
+    const dist = Math.sqrt(dx * dx * 1.2 + dy * dy * 0.8);
+    const loop = Math.max(0, 1 - dist * 1.8);
 
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
-    geometry.computeVertexNormals();
-    return geometry;
+    // Add twist detail
+    const twist = Math.sin((offsetFrac + rowFrac) * Math.PI * 2) * 0.15;
+
+    return loop * depth + twist * depth;
   }
 
-  static knitNoise(x, y, res) {
-    const sx = Math.sin(x * res) * Math.cos(y * res * 0.7);
-    const sy = Math.sin(y * res * 1.1) * Math.cos(x * res * 0.9);
-    const weave = Math.sin((x + y) * res * 0.5) * 0.3;
-    return (sx + sy + weave) * 0.33;
-  }
+  // Bobble pattern: Raised bobble stitches at regular intervals
+  static bobblePattern(x, y, scale, depth) {
+    const bobbleW = scale * 1.5;
+    const bobbleH = scale * 1.5;
 
-  static crochetNoise(x, y, res) {
-    const angle = Math.atan2(y, x) * 3;
-    const radius = Math.sqrt(x * x + y * y) * res;
-    const spiral = Math.sin(radius + angle) * 0.5;
-    const bumps = Math.sin(x * res * 2) * Math.sin(y * res * 2) * 0.5;
-    return spiral + bumps * 0.5;
-  }
+    const col = x / bobbleW;
+    const row = y / bobbleH;
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
 
-  static bobbleNoise(x, y, res) {
-    const dx = Math.sin(x * res * 0.5) * 2;
-    const dy = Math.sin(y * res * 0.5) * 2;
+    // Circular bobble
+    const dx = (colFrac - 0.5) * 2;
+    const dy = (rowFrac - 0.5) * 2;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    return Math.max(0, 1 - dist) * Math.sin(dist * Math.PI);
+
+    if (dist < 0.7) {
+      // Bobble shape: rounded dome
+      const bobble = Math.cos(dist / 0.7 * Math.PI / 2);
+      return bobble * depth;
+    }
+    // Slight depression between bobbles
+    return -0.05 * depth;
   }
 
-  static ribNoise(x, y, res) {
-    return Math.sin(y * res * 2) * 0.7 + Math.sin(x * res) * 0.3;
+  // Rib pattern: Raised vertical columns (knit ribs)
+  static ribPattern(x, y, scale, depth) {
+    const ribW = scale * 0.6;
+    const col = x / ribW;
+    const colFrac = col - Math.floor(col);
+
+    // Vertical rib columns
+    const rib = Math.cos(colFrac * Math.PI * 2) * 0.5 + 0.5;
+
+    // Slight horizontal compression (rib pull-in)
+    const compression = 1 - Math.abs(Math.sin(colFrac * Math.PI)) * 0.1;
+
+    return rib * depth * compression;
   }
 
-  static cableNoise(x, y, res) {
-    const twist = Math.sin((x + Math.sin(y * res) * 0.5) * res * 1.5);
-    const base = Math.sin(y * res * 0.8) * 0.4;
-    return twist * 0.6 + base;
+  // Cable pattern: Twisted rope-like cables
+  static cablePattern(x, y, scale, depth) {
+    const cableW = scale * 2.5;
+    const cableH = scale * 1.2;
+
+    const col = x / cableW;
+    const row = y / cableH;
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+
+    // Create twisted cable appearance
+    const twist = Math.sin(rowFrac * Math.PI * 4 + col * Math.PI * 2) * 0.5 + 0.5;
+    const cable = Math.cos((colFrac - 0.5) * Math.PI * 3) * 0.5 + 0.5;
+    const wave = Math.sin(row * 0.5) * 0.2;
+
+    return (twist * cable + wave) * depth;
   }
 
-  static applyPattern(geometry, patternType, scale, depth, resolution) {
-    switch (patternType) {
-      case 'knit': return this.applyKnitPattern(geometry, scale, depth, resolution);
-      case 'crochet': return this.applyCrochetPattern(geometry, scale, depth, resolution);
-      case 'bobble': return this.applyGenericPattern(geometry, scale, depth, resolution, (x, y, r) => this.bobbleNoise(x, y, r));
-      case 'rib': return this.applyGenericPattern(geometry, scale, depth, resolution, (x, y, r) => this.ribNoise(x, y, r));
-      case 'cable': return this.applyGenericPattern(geometry, scale, depth, resolution, (x, y, r) => this.cableNoise(x, y, r));
-      default: return geometry;
+  // Seed stitch: Alternating knit and purl bumps
+  static seedPattern(x, y, scale, depth) {
+    const stitchW = scale;
+    const stitchH = scale;
+
+    const col = Math.floor(x / stitchW);
+    const row = Math.floor(y / stitchH);
+    const colFrac = (x / stitchW) - col;
+    const rowFrac = (y / stitchH) - row;
+
+    const isPurl = (col + row) % 2 === 0;
+
+    if (isPurl) {
+      // Purl bump
+      const dx = (colFrac - 0.5) * 2;
+      const dy = (rowFrac - 0.5) * 2;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      return Math.max(0, 1 - dist * 2) * depth * 0.6;
+    } else {
+      // Knit stitch (flat with slight texture)
+      return Math.sin(colFrac * Math.PI) * Math.sin(rowFrac * Math.PI) * depth * 0.2;
     }
   }
 
-  static applyGenericPattern(geometry, scale, depth, resolution, noiseFn) {
+  // Garter stitch: Horizontal ridges on every row
+  static garterPattern(x, y, scale, depth) {
+    const ridgeH = scale * 0.8;
+    const rowFrac = (y / ridgeH) - Math.floor(y / ridgeH);
+
+    // Horizontal ridge
+    const ridge = Math.cos(rowFrac * Math.PI * 2) * 0.5 + 0.5;
+    return ridge * depth * 0.4;
+  }
+
+  // Shell stitch (crochet): Fan-like shell patterns
+  static shellPattern(x, y, scale, depth) {
+    const shellW = scale * 2;
+    const shellH = scale * 1.5;
+
+    const col = x / shellW;
+    const row = y / shellH;
+    const colFrac = col - Math.floor(col);
+    const rowFrac = row - Math.floor(row);
+
+    // Create shell fan shape
+    const fan = Math.sin(colFrac * Math.PI * 3) * 0.5 + 0.5;
+    const wave = Math.sin(rowFrac * Math.PI);
+
+    return fan * wave * depth;
+  }
+
+  static applyPattern(geometry, patternType, scale, depth) {
     const posAttr = geometry.attributes.position;
     const normalAttr = geometry.attributes.normal;
     const vertexCount = posAttr.count;
     const newPositions = new Float32Array(vertexCount * 3);
 
+    // We need UV mapping for proper texture - project to best fit plane
+    const box = new THREE.Box3();
+    const positions = [];
     for (let i = 0; i < vertexCount; i++) {
-      const x = posAttr.getX(i);
-      const y = posAttr.getY(i);
-      const z = posAttr.getZ(i);
+      positions.push(new THREE.Vector3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)));
+    }
+    box.setFromPoints(positions);
+
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z);
+
+    // Project each vertex to a 2D plane based on dominant normal
+    for (let i = 0; i < vertexCount; i++) {
+      const px = posAttr.getX(i);
+      const py = posAttr.getY(i);
+      const pz = posAttr.getZ(i);
       const nx = normalAttr.getX(i);
       const ny = normalAttr.getY(i);
       const nz = normalAttr.getZ(i);
 
-      const u = x / scale;
-      const v = y / scale;
-      const pattern = noiseFn(u, v, resolution);
+      // Determine best projection plane based on normal
+      const absNx = Math.abs(nx);
+      const absNy = Math.abs(ny);
+      const absNz = Math.abs(nz);
 
-      newPositions[i * 3] = x + nx * pattern * depth;
-      newPositions[i * 3 + 1] = y + ny * pattern * depth;
-      newPositions[i * 3 + 2] = z + nz * pattern * depth;
+      let u, v;
+      if (absNx >= absNy && absNx >= absNz) {
+        // Project to YZ plane
+        u = py;
+        v = pz;
+      } else if (absNy >= absNx && absNy >= absNz) {
+        // Project to XZ plane
+        u = px;
+        v = pz;
+      } else {
+        // Project to XY plane
+        u = px;
+        v = py;
+      }
+
+      // Calculate pattern displacement
+      let displacement = 0;
+      switch (patternType) {
+        case 'knit':
+          displacement = this.knitPattern(u, v, scale, depth);
+          break;
+        case 'crochet':
+          displacement = this.crochetPattern(u, v, scale, depth);
+          break;
+        case 'bobble':
+          displacement = this.bobblePattern(u, v, scale, depth);
+          break;
+        case 'rib':
+          displacement = this.ribPattern(u, v, scale, depth);
+          break;
+        case 'cable':
+          displacement = this.cablePattern(u, v, scale, depth);
+          break;
+        case 'seed':
+          displacement = this.seedPattern(u, v, scale, depth);
+          break;
+        case 'garter':
+          displacement = this.garterPattern(u, v, scale, depth);
+          break;
+        case 'shell':
+          displacement = this.shellPattern(u, v, scale, depth);
+          break;
+        default:
+          displacement = this.knitPattern(u, v, scale, depth);
+      }
+
+      // Apply displacement along normal
+      newPositions[i * 3] = px + nx * displacement;
+      newPositions[i * 3 + 1] = py + ny * displacement;
+      newPositions[i * 3 + 2] = pz + nz * displacement;
     }
 
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
@@ -199,13 +316,12 @@ class STLExporter {
     const bufferLength = 84 + triangleCount * 50;
     const buffer = new ArrayBuffer(bufferLength);
     const view = new DataView(buffer);
-    const writer = new TextEncoder().encodeInto('Crothet Export', new Uint8Array(buffer, 0, 80));
+    new TextEncoder().encodeInto('Crothet Export', new Uint8Array(buffer, 0, 80));
     view.setUint32(80, triangleCount, true);
 
     for (let i = 0; i < triangleCount; i++) {
       const offset = 84 + i * 50;
       const i3 = i * 9;
-      const i9 = i * 9;
 
       let nx = 0, ny = 0, nz = 0;
       if (geometry.attributes.normal) {
@@ -234,7 +350,6 @@ class STLExporter {
 let scene, camera, renderer, controls;
 let currentMesh = null;
 let originalGeometry = null;
-let isInitialized = false;
 
 // ========== Three.js Init ==========
 function initViewer() {
@@ -270,7 +385,6 @@ function initViewer() {
     renderer.setSize(w, h);
   });
 
-  isInitialized = true;
   animate();
 }
 
@@ -295,7 +409,7 @@ function handleFile(file) {
       showStatus(`STL indlæst: ${result.triangleCount} trekanter`, 'success');
       document.getElementById('applyBtn').disabled = false;
       document.getElementById('downloadBtn').disabled = true;
-      
+
       const info = document.getElementById('info');
       info.innerHTML = `Trekanter: ${result.triangleCount}<br>Type: ${result.isBinary ? 'Binær' : 'ASCII'}`;
     } catch (err) {
@@ -321,8 +435,8 @@ function loadGeometry(vertices, normals) {
 
   originalGeometry = geometry.clone();
 
-  const material = new THREE.MeshPhongMaterial({ 
-    color: 0xe94560, 
+  const material = new THREE.MeshPhongMaterial({
+    color: 0xe94560,
     specular: 0x222222,
     shininess: 30,
     side: THREE.DoubleSide
@@ -347,19 +461,29 @@ function applyTexture() {
   const patternType = document.getElementById('patternType').value;
   const scale = parseFloat(document.getElementById('scale').value);
   const depth = parseFloat(document.getElementById('depth').value);
-  const resolution = parseFloat(document.getElementById('resolution').value);
 
   showStatus('Anvender tekstur...', 'success');
 
   setTimeout(() => {
     try {
       const newGeometry = originalGeometry.clone();
-      TextureGenerator.applyPattern(newGeometry, patternType, scale, depth, resolution);
-      
+      TextureGenerator.applyPattern(newGeometry, patternType, scale, depth);
+
       currentMesh.geometry.dispose();
       currentMesh.geometry = newGeometry;
-      
-      currentMesh.material.color.setHex(patternType === 'crochet' ? 0xf4a460 : patternType === 'bobble' ? 0x9b59b6 : patternType === 'rib' ? 0x3498db : patternType === 'cable' ? 0x2ecc71 : 0xe94560);
+
+      // Color based on pattern
+      const colors = {
+        'knit': 0xe94560,
+        'crochet': 0xf4a460,
+        'bobble': 0x9b59b6,
+        'rib': 0x3498db,
+        'cable': 0x2ecc71,
+        'seed': 0xe67e22,
+        'garter': 0x1abc9c,
+        'shell': 0xf39c12
+      };
+      currentMesh.material.color.setHex(colors[patternType] || 0xe94560);
 
       showStatus('Tekstur anvendt!', 'success');
       document.getElementById('downloadBtn').disabled = false;
@@ -420,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('downloadBtn').addEventListener('click', downloadSTL);
 
   // Slider value updates
-  ['scale', 'depth', 'resolution'].forEach(id => {
+  ['scale', 'depth'].forEach(id => {
     const slider = document.getElementById(id);
     const valueSpan = document.getElementById(id + 'Value');
     slider.addEventListener('input', () => { valueSpan.textContent = slider.value; });
